@@ -1,32 +1,26 @@
 name: Bench
 
-# The unified benchmark runner as a REGRESSION GATE. It enforces ONLY the
-# paired ratio guards in benchmarks/baselines/ratios.json (`--ratios`): each
-# guard compares two targets measured on the SAME runner in the SAME run. Byte
-# and count ratios are deterministic for a fixed toolchain; timing ratios use
-# explicit noise headroom.
-#
-# Absolute-baseline comparison (`--record` / `--compare` against
-# benchmarks/baselines/local/*.json) is deliberately NOT run here. Absolute
-# timing records are machine-specific, while deterministic local records are
-# retained as developer baselines rather than CI gates. See the baseline README.
-#
-# Runs on manual dispatch and a weekly cron (not on every push — the browser
-# suites take minutes). The collected per-suite JSON is uploaded as an artifact.
+# Temporary fork-only measurement for PR #982. The dispatched branch contains
+# exactly PR 42fb6996a plus this workflow change. The production mount gate and
+# compiled Activity comparisons run with one pinned installation on one runner.
 
 on:
   workflow_dispatch:
-  schedule:
-    # Mondays 06:00 UTC.
-    - cron: "0 6 * * 1"
 
 jobs:
   bench:
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 90
+    env:
+      BASE_SHA: 1e6ca0ed65a48efd94be1927fd371e853aa538c1
+      PR_SHA: 42fb6996aeb8fa5c806ec6a31565a9a8b174ed13
+      RESULTS: benchmarks/results/pr982-root-transactions
 
     steps:
       - name: Checkout code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
@@ -37,38 +31,84 @@ jobs:
           node-version: 24
           cache: "pnpm"
 
-      - name: Test benchmark work collector
-        run: node --test benchmarks/lib/precise-work.test.mjs
-
       - name: Install dependencies
         run: pnpm install --prod false --frozen-lockfile
-
-      - name: Test Lynx diagnostic fixture contracts
-        run: |
-          node --test benchmarks/lynx-table/stages/*.test.mjs
-          node --test benchmarks/lynx-list/*.test.mjs
-
-      - name: Test UIbench measurement failures
-        run: node --test benchmarks/uibench/run.test.mjs
-
-      - name: Verify synthetic workerd app workloads
-        run: |
-          node --test benchmarks/ssr-workerd/app-workloads/verify.test.mjs
-          BENCH_ROUNDS=1 node benchmarks/ssr-workerd/app-workloads/run.mjs 1
 
       - name: Install Playwright Chromium
         run: pnpm --filter octane-js-framework-benchmarks exec playwright install --with-deps chromium
 
-      # --quick keeps every code path + correctness gate exercised at reduced
-      # iterations; --ratios enforces the committed ratio guards and fails the job
-      # on any breach. Absolute baselines are intentionally not compared here.
-      - name: Run benchmarks (quick, ratio guards)
-        run: node benchmarks/bench.mjs --quick --ratios
+      - name: Record exact source and runner provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RESULTS"
+          test "$(git diff --name-only "$PR_SHA" HEAD)" = '.github/workflows/bench.yml'
+          git cat-file -e "$BASE_SHA^{commit}"
+          git cat-file -e "$PR_SHA^{commit}"
+          {
+            printf 'workflow_head=%s\n' "$(git rev-parse HEAD)"
+            printf 'candidate_pr_head=%s\n' "$PR_SHA"
+            printf 'baseline_main=%s\n' "$BASE_SHA"
+            printf 'candidate_parent=%s\n' "$(git rev-parse HEAD^)"
+            printf 'node=%s\n' "$(node --version)"
+            printf 'pnpm=%s\n' "$(pnpm --version)"
+            printf 'lockfile_sha256=%s\n' "$(sha256sum pnpm-lock.yaml)"
+            printf 'candidate_runtime_sha256=%s\n' "$(sha256sum packages/octane/src/runtime.ts)"
+            printf 'js_framework_fixture_sha256=%s\n' "$(sha256sum benchmarks/js-framework/octane-tsrx/src/Main.tsrx)"
+            printf 'activity_fixture_sha256=%s\n' "$(sha256sum benchmarks/activity/App.tsrx)"
+          } | tee "$RESULTS/provenance.txt"
+
+      - name: Count candidate 1k production mount calls
+        id: js_framework
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --filter octane-tsrx-jsbench build 2>&1 | tee "$RESULTS/js-framework-build.log"
+          sha256sum benchmarks/js-framework/octane-tsrx/dist/assets/*.js | tee "$RESULTS/js-framework-assets.sha256"
+          pnpm --filter octane-tsrx-jsbench exec vite preview --host 127.0.0.1 --port 5176 --strictPort > "$RESULTS/js-framework-preview.log" 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:5176/ > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:5176/ > /dev/null
+          set +e
+          TARGETS='[{"name":"octane-tsrx","url":"http://127.0.0.1:5176/","ready":"#run"}]' BENCH_JSON="$RESULTS/js-framework-candidate.json" node benchmarks/js-framework/run.mjs 8 2>&1 | tee "$RESULTS/js-framework-candidate.log"
+          gate_status=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$gate_status" > "$RESULTS/js-framework-status.txt"
+          exit "$gate_status"
+        continue-on-error: true
+
+      - name: Measure compiled Activity base and candidate ABAB
+        id: activity
+        shell: bash
+        run: |
+          set -euo pipefail
+          for variant in base-1 candidate-1 base-2 candidate-2; do
+            case "$variant" in
+              base-*) revision="$BASE_SHA" ;;
+              candidate-*) revision="$PR_SHA" ;;
+            esac
+            BENCH_JSON="$RESULTS/activity-$variant.json" node benchmarks/activity/run.mjs 8 --target=octane-tsrx "--octane-revision=$revision" 2>&1 | tee "$RESULTS/activity-$variant.log"
+          done
+          for variant in base candidate; do
+            if test "$variant" = base; then revision="$BASE_SHA"; else revision="$PR_SHA"; fi
+            BENCH_JSON="$RESULTS/activity-work-$variant.json" node benchmarks/activity/work.mjs --target=octane-tsrx "--octane-revision=$revision" 2>&1 | tee "$RESULTS/activity-work-$variant.log"
+          done
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: bench-results
-          path: benchmarks/results/
+          name: pr982-root-transactions-${{ github.run_id }}
+          path: benchmarks/results/pr982-root-transactions/
           if-no-files-found: warn
+
+      - name: Enforce mount gate and Activity comparisons
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.js_framework.outcome }}" = success
+          test "${{ steps.activity.outcome }}" = success
