@@ -1,7 +1,7 @@
 name: Bench
 
 # Temporary fork-only measurement for PR #982. The dispatched branch contains
-# exactly PR 42fb6996a plus this workflow change. The production mount gate and
+# exactly PR 7c9aacfd5 plus this workflow change. The production mount gate and
 # compiled Activity comparisons run with one pinned installation on one runner.
 
 on:
@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 90
     env:
       BASE_SHA: 1e6ca0ed65a48efd94be1927fd371e853aa538c1
-      PR_SHA: 42fb6996aeb8fa5c806ec6a31565a9a8b174ed13
+      PR_SHA: 7c9aacfd53c3dd699de262f1e5a54d317ba428b1
       RESULTS: benchmarks/results/pr982-root-transactions
 
     steps:
@@ -49,7 +49,6 @@ jobs:
             printf 'workflow_head=%s\n' "$(git rev-parse HEAD)"
             printf 'candidate_pr_head=%s\n' "$PR_SHA"
             printf 'baseline_main=%s\n' "$BASE_SHA"
-            printf 'candidate_parent=%s\n' "$(git rev-parse HEAD^)"
             printf 'node=%s\n' "$(node --version)"
             printf 'pnpm=%s\n' "$(pnpm --version)"
             printf 'lockfile_sha256=%s\n' "$(sha256sum pnpm-lock.yaml)"
