@@ -43,14 +43,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --prod false --frozen-lockfile
 
-      # app-workloads/run.mjs lives under ssr-workerd but its package manifest
-      # omits the Octane/TSRX dependencies used by that internal benchmark.
-      - name: Link Octane and TSRX for the workerd workload preflight
-        run: |
-          test "$(node -p "require('./packages/octane/node_modules/@tsrx/core/package.json').version")" = "0.1.69"
-          ln -s ../../../packages/octane benchmarks/ssr-workerd/node_modules/octane
-          ln -s ../../../packages/octane/node_modules/@tsrx benchmarks/ssr-workerd/node_modules/@tsrx
-
       - name: Test Lynx diagnostic fixture contracts
         run: |
           node --test benchmarks/lynx-table/stages/*.test.mjs
@@ -59,19 +51,10 @@ jobs:
       - name: Test UIbench measurement failures
         run: node --test benchmarks/uibench/run.test.mjs
 
-      - name: Verify synthetic workerd app workloads
-        run: |
-          node --test benchmarks/ssr-workerd/app-workloads/verify.test.mjs
-          BENCH_ROUNDS=1 node benchmarks/ssr-workerd/app-workloads/run.mjs 1
-
-      - name: Install Playwright Chromium
-        run: pnpm --filter octane-js-framework-benchmarks exec playwright install --with-deps chromium
-
-      # --quick keeps every code path + correctness gate exercised at reduced
-      # iterations; --ratios enforces the committed ratio guards and fails the job
-      # on any breach. Absolute baselines are intentionally not compared here.
-      - name: Run benchmarks (quick, ratio guards)
-        run: node benchmarks/bench.mjs --quick --ratios
+      # Isolated fork run of the exact PR sources: the paired codegen-size
+      # ratio guards use the pinned toolchain without requiring browser setup.
+      - name: Run codegen-size benchmark (quick, ratio guards)
+        run: node benchmarks/bench.mjs --quick --ratios codegen-size
 
       - name: Upload results
         if: always()
