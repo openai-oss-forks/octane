@@ -43,6 +43,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --prod false --frozen-lockfile
 
+      # Scratch-branch proof only: the compiler is the unmodified merged #995
+      # base, while the regression files are copied from the candidate branch.
+      - name: Confirm composed-class regressions fail on the merged base
+        run: pnpm exec vitest run packages/octane/tests/clsx-class.test.ts packages/octane/tests/fresh-root-scope-hold.test.ts --project octane --project octane-prod --silent=false
+
       - name: Test Lynx diagnostic fixture contracts
         run: |
           node --test benchmarks/lynx-table/stages/*.test.mjs
