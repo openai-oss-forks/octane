@@ -26579,6 +26579,7 @@ function unionEnv(ctx, bodies) {
 // arg; the compiled call site passes the current values every parent render):
 //
 //   function __then$0(__props, __s, __extra) { const label = __extra[0]; … }
+//   function __item$1(__props, __s, __extra) { const { 0: label, 2: suffix } = __extra; … }
 //
 // `envNames: null` keeps the legacy placement — the helper is emitted INSIDE
 // the component function so its closures capture the parent's locals
@@ -26605,8 +26606,10 @@ function hoistBodyHelper(
 	if (envNames && envNames.length > 0) {
 		// Read only this helper's captures at their positions in the construct's
 		// shared UNION tuple. Union-only names must not become local bindings: an
-		// arm may have a same-named local shadowing another arm's capture. Direct
-		// indexed reads avoid iterator work before these helpers optimize.
+		// arm may have a same-named local shadowing another arm's capture. Numeric
+		// property reads avoid iterator work before these helpers optimize. A
+		// single capture uses an indexed read; multiple captures share one compact
+		// object binding.
 		// Each binding maps to the construct body it feeds.
 		const envOrigin =
 			(Array.isArray(stmts) && stmts.find((s) => s != null && s.loc != null)) ||
@@ -26616,14 +26619,25 @@ function hoistBodyHelper(
 		for (let i = 0; i < envNames.length; i++) {
 			const name = envNames[i];
 			if (!ownEnv.has(name)) continue;
-			captures.push(
-				inheritOriginLoc(
-					b.const(b.id(name), b.member(b.id('__extra'), b.literal(i), true)),
-					envOrigin,
-				),
-			);
+			captures.push({ name, index: i });
 		}
-		bodyStmts = [...captures, ...stmts];
+		if (captures.length > 0) {
+			const binding =
+				captures.length === 1
+					? b.const(
+							b.id(captures[0].name),
+							b.member(b.id('__extra'), b.literal(captures[0].index), true),
+						)
+					: b.const(
+							b.object_pattern(
+								captures.map(({ name, index }) =>
+									b.prop('init', b.literal(index), b.id(name), false, false),
+								),
+							),
+							b.id('__extra'),
+						);
+			bodyStmts = [inheritOriginLoc(binding, envOrigin), ...stmts];
+		}
 	}
 	// The synthetic helper shell maps to the construct body it hoists.
 	const fakeOrigin =
