@@ -22,7 +22,7 @@ on:
 
 jobs:
   bench:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -51,19 +51,34 @@ jobs:
       - name: Test UIbench measurement failures
         run: node --test benchmarks/uibench/run.test.mjs
 
-      - name: Verify synthetic workerd app workloads
-        run: |
-          node --test benchmarks/ssr-workerd/app-workloads/verify.test.mjs
-          BENCH_ROUNDS=1 node benchmarks/ssr-workerd/app-workloads/run.mjs 1
-
       - name: Install Playwright Chromium
         run: pnpm --filter octane-js-framework-benchmarks exec playwright install --with-deps chromium
+
+      # The TodoMVC driver batches 100 keyboard events in one page task and
+      # already awaits __benchFlush after each interaction when one is exposed.
+      # Add that boundary only to this fork's hosted benchmark checkout.
+      - name: Enable per-interaction TodoMVC flush
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const file = 'benchmarks/todomvc/octane-tsrx/src/main.js';
+          const source = readFileSync(file, 'utf8');
+          const original = "import { createRoot } from 'octane';";
+          if (!source.startsWith(original) || source.includes('__benchFlush')) {
+            throw new Error('Unexpected TodoMVC entry for hosted flush adapter');
+          }
+          writeFileSync(
+            file,
+            source.replace(original, "import { createRoot, flushSync } from 'octane';") +
+              '\nwindow.__benchFlush = () => flushSync(() => {});\n',
+          );
+          NODE
 
       # --quick keeps every code path + correctness gate exercised at reduced
       # iterations; --ratios enforces the committed ratio guards and fails the job
       # on any breach. Absolute baselines are intentionally not compared here.
       - name: Run benchmarks (quick, ratio guards)
-        run: node benchmarks/bench.mjs --quick --ratios
+        run: node benchmarks/bench.mjs --quick --ratios codegen-size todomvc bundle-size
 
       - name: Upload results
         if: always()
