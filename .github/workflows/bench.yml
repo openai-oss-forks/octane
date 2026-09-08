@@ -43,6 +43,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --prod false --frozen-lockfile
 
+      # app-workloads/run.mjs lives under ssr-workerd but its package manifest
+      # omits the workspace dependency used by that internal benchmark.
+      - name: Link Octane for the workerd workload preflight
+        run: ln -s ../../../packages/octane benchmarks/ssr-workerd/node_modules/octane
+
       - name: Test Lynx diagnostic fixture contracts
         run: |
           node --test benchmarks/lynx-table/stages/*.test.mjs
