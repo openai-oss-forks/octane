@@ -22,7 +22,7 @@ on:
 
 jobs:
   bench:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -63,7 +63,7 @@ jobs:
       # iterations; --ratios enforces the committed ratio guards and fails the job
       # on any breach. Absolute baselines are intentionally not compared here.
       - name: Run benchmarks (quick, ratio guards)
-        run: node benchmarks/bench.mjs --quick --ratios
+        run: node benchmarks/bench.mjs --quick --ratios codegen-size todomvc bundle-size
 
       - name: Upload results
         if: always()
