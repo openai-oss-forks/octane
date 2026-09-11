@@ -13,7 +13,7 @@ jobs:
     env:
       CI: true
       BASELINE: c8ac7d93a96278b47c5896cba2edff5465c71478
-      CANDIDATE: 4bd87cbe07ea6cfb036aa1cdc20884713e682caf
+      CANDIDATE: 15473a76c0daacbc6c327d6199a8a25ee889de5e
     steps:
       - name: Checkout validation branch
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -31,10 +31,21 @@ jobs:
           cache: pnpm
 
       - name: Install locked dependencies
+        id: install
         run: pnpm install --prod false --frozen-lockfile
 
       - name: Install Playwright Chromium
+        id: browser
         run: pnpm exec playwright install --with-deps chromium
+
+      - name: Verify candidate sync and formatting
+        shell: bash
+        run: |
+          mkdir -p validation-results
+          pnpm sync 2>&1 | tee validation-results/sync.log
+          git diff > validation-results/sync.patch
+          git diff --exit-code
+          pnpm format:files:check packages/octane/src/compiler/compile.js packages/octane/tests/style-object-literals.test.ts packages/octane/tests/_fixtures/style-object-shorthand.tsrx packages/octane/tests/browser/style-object-literals 2>&1 | tee validation-results/format.log
 
       - name: Confirm regression fails with baseline compiler
         shell: bash
@@ -70,12 +81,21 @@ jobs:
           WORK_EXPECT_DUPLICATES_OPTIMIZED=0 WORK_JSON=validation-results/baseline-work.json node benchmarks/js-framework/style-literals-work.mjs 2>&1 | tee validation-results/baseline-work.log
 
       - name: Verify candidate regressions
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         shell: bash
         run: |
           git show "$CANDIDATE:packages/octane/src/compiler/compile.js" > packages/octane/src/compiler/compile.js
           pnpm exec vitest run packages/octane/tests/style-object-literals.test.ts --project octane --project octane-prod --silent=passed-only --reporter=default --reporter=json --outputFile=validation-results/candidate-tests.json 2>&1 | tee validation-results/candidate-tests.log
 
+      - name: Verify candidate browser hydration
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
+        shell: bash
+        run: |
+          git show "$CANDIDATE:packages/octane/src/compiler/compile.js" > packages/octane/src/compiler/compile.js
+          pnpm exec vitest run packages/octane/tests/browser/style-object-literals/style-object-literals.test.ts --project octane-events-browser --silent=passed-only --reporter=default --reporter=json --outputFile=validation-results/candidate-browser.json 2>&1 | tee validation-results/candidate-browser.log
+
       - name: Measure candidate style work
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
         shell: bash
         run: |
           pnpm --filter octane-tsrx-naive-jsbench build:style-literals 2>&1 | tee validation-results/candidate-build.log
