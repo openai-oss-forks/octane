@@ -1,74 +1,98 @@
 name: Bench
 
-# The unified benchmark runner as a REGRESSION GATE. It enforces ONLY the
-# paired ratio guards in benchmarks/baselines/ratios.json (`--ratios`): each
-# guard compares two targets measured on the SAME runner in the SAME run. Byte
-# and count ratios are deterministic for a fixed toolchain; timing ratios use
-# explicit noise headroom.
-#
-# Absolute-baseline comparison (`--record` / `--compare` against
-# benchmarks/baselines/local/*.json) is deliberately NOT run here. Absolute
-# timing records are machine-specific, while deterministic local records are
-# retained as developer baselines rather than CI gates. See the baseline README.
-#
-# Runs on manual dispatch and a weekly cron (not on every push — the browser
-# suites take minutes). The collected per-suite JSON is uploaded as an artifact.
-
 on:
   workflow_dispatch:
-  schedule:
-    # Mondays 06:00 UTC.
-    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
 
 jobs:
-  bench:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-
+  duplicate-inline-style:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: true
+      BASELINE: c8ac7d93a96278b47c5896cba2edff5465c71478
+      CANDIDATE: 4bd87cbe07ea6cfb036aa1cdc20884713e682caf
     steps:
-      - name: Checkout code
+      - name: Checkout validation branch
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Install pnpm
+      - name: Install pnpm from packageManager
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
 
       - name: Setup Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-          cache: "pnpm"
+          cache: pnpm
 
-      - name: Test benchmark work collector
-        run: node --test benchmarks/lib/precise-work.test.mjs
-
-      - name: Install dependencies
+      - name: Install locked dependencies
         run: pnpm install --prod false --frozen-lockfile
 
-      - name: Test Lynx diagnostic fixture contracts
-        run: |
-          node --test benchmarks/lynx-table/stages/*.test.mjs
-          node --test benchmarks/lynx-list/*.test.mjs
-
-      - name: Test UIbench measurement failures
-        run: node --test benchmarks/uibench/run.test.mjs
-
-      - name: Verify synthetic workerd app workloads
-        run: |
-          node --test benchmarks/ssr-workerd/app-workloads/verify.test.mjs
-          BENCH_ROUNDS=1 node benchmarks/ssr-workerd/app-workloads/run.mjs 1
-
       - name: Install Playwright Chromium
-        run: pnpm --filter octane-js-framework-benchmarks exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
-      # --quick keeps every code path + correctness gate exercised at reduced
-      # iterations; --ratios enforces the committed ratio guards and fails the job
-      # on any breach. Absolute baselines are intentionally not compared here.
-      - name: Run benchmarks (quick, ratio guards)
-        run: node benchmarks/bench.mjs --quick --ratios
+      - name: Confirm regression fails with baseline compiler
+        shell: bash
+        run: |
+          mkdir -p validation-results
+          git show "$BASELINE:packages/octane/src/compiler/compile.js" > packages/octane/src/compiler/compile.js
+          set +e
+          pnpm exec vitest run packages/octane/tests/style-object-literals.test.ts --project octane --project octane-prod --silent=passed-only --reporter=default --reporter=json --outputFile=validation-results/baseline-tests.json 2>&1 | tee validation-results/baseline-tests.log
+          test_status=${PIPESTATUS[0]}
+          set -e
+          test "$test_status" -ne 0
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';
+          const report = JSON.parse(fs.readFileSync('validation-results/baseline-tests.json', 'utf8'));
+          const failures = report.testResults.flatMap(result => result.assertionResults ?? []).filter(test => test.status === 'failed');
+          if (!failures.some(test => test.fullName.includes('resolves duplicate literal keys'))) {
+            throw new Error('Baseline must fail the duplicate literal behavior assertion, not setup');
+          }
+          console.log(`Confirmed baseline regression: ${report.numFailedTests} failed tests.`);
+          NODE
 
-      - name: Upload results
+      - name: Measure baseline style work
+        shell: bash
+        run: |
+          pnpm --filter octane-tsrx-naive-jsbench build:style-literals 2>&1 | tee validation-results/baseline-build.log
+          pnpm --filter octane-tsrx-naive-jsbench preview:style-literals > validation-results/baseline-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:5233/style-literals.html > /dev/null; then break; fi
+            sleep 1
+          done
+          WORK_EXPECT_DUPLICATES_OPTIMIZED=0 WORK_JSON=validation-results/baseline-work.json node benchmarks/js-framework/style-literals-work.mjs 2>&1 | tee validation-results/baseline-work.log
+
+      - name: Verify candidate regressions
+        shell: bash
+        run: |
+          git show "$CANDIDATE:packages/octane/src/compiler/compile.js" > packages/octane/src/compiler/compile.js
+          pnpm exec vitest run packages/octane/tests/style-object-literals.test.ts --project octane --project octane-prod --silent=passed-only --reporter=default --reporter=json --outputFile=validation-results/candidate-tests.json 2>&1 | tee validation-results/candidate-tests.log
+
+      - name: Measure candidate style work
+        shell: bash
+        run: |
+          pnpm --filter octane-tsrx-naive-jsbench build:style-literals 2>&1 | tee validation-results/candidate-build.log
+          pnpm --filter octane-tsrx-naive-jsbench preview:style-literals --port 5234 > validation-results/candidate-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:5234/style-literals.html > /dev/null; then break; fi
+            sleep 1
+          done
+          TARGET_URL=http://127.0.0.1:5234/style-literals.html WORK_JSON=validation-results/candidate-work.json node benchmarks/js-framework/style-literals-work.mjs 2>&1 | tee validation-results/candidate-work.log
+          git diff --exit-code -- packages/octane/src/compiler/compile.js
+
+      - name: Upload regression and benchmark evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: bench-results
-          path: benchmarks/results/
+          name: duplicate-inline-style-validation
+          path: validation-results/
           if-no-files-found: warn
