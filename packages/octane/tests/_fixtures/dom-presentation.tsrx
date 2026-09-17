@@ -276,6 +276,9 @@ export function NativeControlPresentation({
 
 export interface NativeControlHostProps {
 	className: string | SignalHandle<string>;
+	iosViewport?: string | null;
+	visualKeyboard?: string | null;
+	tabIndex?: number;
 	children?: OctaneNode;
 	action?: string;
 	inert?: boolean;
@@ -287,6 +290,9 @@ export function NativeControlHost(props: NativeControlHostProps) @{
 	'use dom bindings';
 	<form
 		class={props.className}
+		data-ios-viewport={props.iosViewport}
+		data-visual-keyboard={props.visualKeyboard}
+		tabIndex={props.tabIndex}
 		action={unbound(props.action)}
 		inert={unbound(props.inert)}
 		ref={unbound(props.onReady)}
@@ -303,6 +309,9 @@ export function NativeControlLayout(
 		inert={props.inert}
 		onReady={props.onReady}
 		onKeyDown={props.onKeyDown}
+		iosViewport={props.iosViewport}
+		visualKeyboard={props.visualKeyboard}
+		tabIndex={props.tabIndex}
 	>
 		<NativeControlPresentation
 			draft={props.draft}
@@ -325,6 +334,9 @@ export function NativeControlLayoutContainer(
 			inert={props.inert}
 			onReady={props.onReady}
 			onKeyDown={props.onKeyDown}
+			iosViewport={props.iosViewport}
+			visualKeyboard={props.visualKeyboard}
+			tabIndex={props.tabIndex}
 			draft={props.draft}
 			readOnly={props.readOnly}
 			disabled={props.disabled}

@@ -438,6 +438,9 @@ describe('behavior-only roots', () => {
 				const props = {
 					action: '/server-submit',
 					inert: false,
+					iosViewport: 'server-viewport',
+					visualKeyboard: 'server-keyboard',
+					tabIndex: 0,
 					onReady,
 					onKeyDown,
 					draft,
@@ -461,11 +464,15 @@ export function NativeStylexControlPresentation({
 }
 export function NativeStylexControlHost(props: NativeControlHostProps) @{
   'use dom bindings';
-  <form {...stylex.attrs({ $$css: true, layout: props.className })} action={unbound(props.action)} inert={unbound(props.inert)}
+  <form {...stylex.attrs({ $$css: true, layout: props.className })}
+    data-ios-viewport={props.iosViewport} data-visual-keyboard={props.visualKeyboard} tabIndex={props.tabIndex}
+    action={unbound(props.action)} inert={unbound(props.inert)}
     ref={unbound(props.onReady)} onKeyDown={unbound(props.onKeyDown)}>{unbound(props.children)}</form>
 }
 export function NativeStylexControlLayout(props: NativeControlPresentationProps & NativeControlHostProps & { styles: stylex.CompiledStyles }) @{
-  <NativeStylexControlHost className={props.className} action={props.action} inert={props.inert}
+  <NativeStylexControlHost className={props.className}
+    iosViewport={props.iosViewport} visualKeyboard={props.visualKeyboard} tabIndex={props.tabIndex}
+    action={props.action} inert={props.inert}
     onReady={props.onReady} onKeyDown={props.onKeyDown}>
     <NativeStylexControlPresentation draft={props.draft} readOnly={props.readOnly}
       disabled={props.disabled} required={props.required} placeholder={props.placeholder} styles={props.styles} />
@@ -491,6 +498,9 @@ export function NativeStylexControlLayout(props: NativeControlPresentationProps 
 								styled ? 'NativeStylexControlHost' : 'NativeControlHost',
 								{
 									className: 'compact',
+									iosViewport: 'early-viewport',
+									visualKeyboard: 'early-keyboard',
+									tabIndex: -1,
 									action: '/ignored-early',
 									inert: true,
 									onReady: earlyReady,
@@ -517,8 +527,18 @@ export function NativeStylexControlLayout(props: NativeControlPresentationProps 
 				try {
 					if (layout) {
 						layoutBinding = layout.attach(form!, layout.state);
-						layout.publish({ className: 'expanded has-status' });
+						layout.publish({
+							className: 'expanded has-status',
+							iosViewport: 'expanded-viewport',
+							visualKeyboard: 'expanded-keyboard',
+							tabIndex: -1,
+						});
 						expect(form!.className).toBe('expanded has-status');
+						expect([
+							form!.getAttribute('data-ios-viewport'),
+							form!.getAttribute('data-visual-keyboard'),
+							form!.tabIndex,
+						]).toEqual(['expanded-viewport', 'expanded-keyboard', -1]);
 						expect(form!.querySelector('textarea')).toBe(textarea);
 						expect(form!.querySelector('p')).toBe(description);
 						expect(form!.getAttribute('action')).toBe('/server-submit');
@@ -561,7 +581,14 @@ export function NativeStylexControlLayout(props: NativeControlPresentationProps 
 						container,
 						client[layout ? layoutView : view],
 						layout
-							? { ...props, className: 'expanded has-status', action: '/accepted-submit' }
+							? {
+									...props,
+									className: 'expanded has-status',
+									iosViewport: 'accepted-viewport',
+									visualKeyboard: null,
+									tabIndex: 0,
+									action: '/accepted-submit',
+								}
 							: props,
 						options,
 					);
@@ -570,6 +597,11 @@ export function NativeStylexControlLayout(props: NativeControlPresentationProps 
 						expect(container.querySelector('form')).toBe(form);
 						expect(form!.querySelector('p')).toBe(description);
 						expect(form!.className).toBe('expanded has-status');
+						expect([
+							form!.getAttribute('data-ios-viewport'),
+							form!.getAttribute('data-visual-keyboard'),
+							form!.tabIndex,
+						]).toEqual(['accepted-viewport', null, 0]);
 						expect(layout.cleanup).toHaveBeenCalledOnce();
 						expect(form!.getAttribute('action')).toBe('/accepted-submit');
 						expect(form!.hasAttribute('inert')).toBe(false);
@@ -579,9 +611,19 @@ export function NativeStylexControlLayout(props: NativeControlPresentationProps 
 						expect(onKeyDown.mock.calls[0][0]).toBeInstanceOf(KeyboardEvent);
 						expect(earlyReady).not.toHaveBeenCalled();
 						expect(earlyKeyDown).not.toHaveBeenCalled();
-						layout.publish({ className: 'stale early layout' });
+						layout.publish({
+							className: 'stale early layout',
+							iosViewport: 'stale-viewport',
+							visualKeyboard: 'stale-keyboard',
+							tabIndex: -1,
+						});
 						layoutBinding!.refresh();
 						expect(form!.className).toBe('expanded has-status');
+						expect([
+							form!.getAttribute('data-ios-viewport'),
+							form!.getAttribute('data-visual-keyboard'),
+							form!.tabIndex,
+						]).toEqual(['accepted-viewport', null, 0]);
 					}
 					expect(container.querySelector('textarea')).toBe(textarea);
 					expect(document.activeElement).toBe(textarea);
@@ -635,11 +677,20 @@ export function NativeStylexControlLayout(props: NativeControlPresentationProps 
 							hydratedRoot!.render(client[layoutView], {
 								...props,
 								className: 'renderer compact',
+								iosViewport: null,
+								visualKeyboard: 'renderer-keyboard',
+								tabIndex: undefined,
 								action: '/renderer-submit',
 							}),
 						);
 						expect(container.querySelector('form')).toBe(form);
 						expect(form!.className).toBe('renderer compact');
+						expect([
+							form!.getAttribute('data-ios-viewport'),
+							form!.getAttribute('data-visual-keyboard'),
+							form!.tabIndex,
+						]).toEqual([null, 'renderer-keyboard', -1]);
+						expect(form!.hasAttribute('tabindex')).toBe(false);
 						expect(form!.getAttribute('action')).toBe('/renderer-submit');
 						form!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 						expect(onKeyDown).toHaveBeenCalledTimes(2);
@@ -650,6 +701,21 @@ export function NativeStylexControlLayout(props: NativeControlPresentationProps 
 						layout.publish({ className: 'stale again' });
 						layoutBinding!.refresh();
 						expect(form!.className).toBe('renderer compact');
+						expect([
+							form!.getAttribute('data-ios-viewport'),
+							form!.getAttribute('data-visual-keyboard'),
+							form!.tabIndex,
+						]).toEqual([null, 'renderer-keyboard', -1]);
+						expect(form!.hasAttribute('tabindex')).toBe(false);
+					}
+					hydratedRoot.unmount();
+					hydratedRoot = undefined;
+					expect(fixture.cleanup).toHaveBeenCalledOnce();
+					if (layout) {
+						expect(layout.cleanup).toHaveBeenCalledOnce();
+						expect(onReady).toHaveBeenCalledTimes(2);
+						expect(onReady).toHaveBeenLastCalledWith(null);
+						expect(earlyReady).not.toHaveBeenCalled();
 					}
 				} finally {
 					hydratedRoot?.unmount();
@@ -5068,6 +5134,39 @@ export function TreeHydration(props) @{
 			hydratedRoot = undefined;
 			layoutBinding.dispose();
 			layoutScope.dispose();
+		}
+
+		for (const dev of [false, true]) {
+			for (const field of ['data-octane-hydrate-id', 'data-octane-native-signals']) {
+				const protocol = authoredPresentation(
+					'ProtocolParent',
+					{ className: 'early', marker: 'owned elsewhere' },
+					dev,
+					`import { unbound } from 'octane/behavior';
+export function ProtocolParent(props) @{ 'use dom bindings';
+ <form class={props.className} ${field}={props.marker}>{unbound(props.children)}</form>
+}`,
+				);
+				range.innerHTML = protocol.html;
+				const host = range.firstElementChild!;
+				const binding = protocol.attach(host, protocol.state);
+				try {
+					const markup = range.innerHTML;
+					expect(() =>
+						hydrateRoot(range, protocol.loadClient().ProtocolParent, protocol.state.getSnapshot(), {
+							bindingLeases: [binding],
+						}),
+					).toThrow(/active fixed native views|Minified Octane error #77;/);
+					expect(range.innerHTML).toBe(markup);
+					expect(range.firstElementChild).toBe(host);
+					expect(protocol.cleanup).not.toHaveBeenCalled();
+					protocol.publish({ className: 'still early' });
+					expect(host.className).toBe('still early');
+				} finally {
+					binding.dispose();
+				}
+				expect(protocol.cleanup).toHaveBeenCalledOnce();
+			}
 		}
 
 		for (const failureKind of ['duplicate', 'projection']) {

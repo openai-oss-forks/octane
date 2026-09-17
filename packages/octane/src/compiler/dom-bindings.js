@@ -1174,6 +1174,10 @@ function planView(fn, filename, source, imports, lexical, native = null) {
 			(binding, index) =>
 				binding[0] === 0 &&
 				(['class', 'styleProperty', 'styleAttribute', 'styleObject'].includes(binding[1]) ||
+					(binding[1] === 'aria' &&
+						((binding[2].startsWith('data-') && !binding[2].startsWith('data-octane-')) ||
+							binding[2].startsWith('aria-'))) ||
+					(binding[1] === 'attr' && binding[2] === 'tabindex') ||
 					providerBindings.has(index)),
 		) &&
 		[...(render.openingElement?.attributes ?? render.attributes ?? [])].every(
