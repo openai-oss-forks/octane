@@ -23,7 +23,7 @@ export function LucideProvider({
 		[size, color, strokeWidth, absoluteStrokeWidth, nonScalingStroke, className],
 		CONTEXT_MEMO_SLOT,
 	);
-	return createElement(LucideContextObject.Provider, { value, children });
+	return createElement(LucideContextObject, { value, children });
 }
 
 export function useLucideContext(): LucideContext {
