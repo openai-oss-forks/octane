@@ -36,6 +36,11 @@ hydration payload; Nitro packages that handler and the client assets for the
 target platform. The generated function stays pinned to Node.js 24, matching
 the previous adapter.
 
+Dynamic HTML streams from the origin without buffering for compression; the
+[Vercel CDN](https://vercel.com/docs/how-vercel-cdn-works/compression) handles
+compression. Direct Node deployments serve uncompressed dynamic HTML unless a
+streaming-capable proxy provides compression. Static assets remain precompressed.
+
 Project settings in the Vercel dashboard:
 
 | Setting          | Value                                        |
