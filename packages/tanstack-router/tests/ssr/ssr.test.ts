@@ -1,14 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'octane/server';
+import { RouterProvider } from '@octanejs/tanstack-router';
 import { attachRouterServerSsrUtils } from '@tanstack/router-core/ssr/server';
 import { getScrollRestorationScriptForRouter } from '@tanstack/router-core/scroll-restoration-script';
 import { RouterServer, renderRouterToStream, renderRouterToString } from '../../src/ssr/server';
 import { finalizeDocumentShell } from '../../src/ssr/renderRouterToStream';
 import { ManagedHeadOwners, makeSsrRouter } from '../_fixtures/ssr.tsrx';
+import { makeLinkRouter } from '../_fixtures/link.tsrx';
 import { renderReactHeadContent } from './_react-head-oracle.js';
 import type { ServerManifest } from '@tanstack/router-core';
 
 describe('@octanejs/tanstack-router SSR', () => {
+	it('preserves custom link fallback content when children are omitted', async () => {
+		const router = makeLinkRouter('/cl');
+		await router.load();
+		const { html } = renderToStaticMarkup(RouterProvider as any, { router });
+		expect(html).toContain('Fallback');
+		expect(html).toContain('Fancy');
+	});
+
 	it('preserves absent and empty head content without merging distinct user tags', async () => {
 		const router = makeSsrRouter();
 		router.routeTree.options.head = () => ({

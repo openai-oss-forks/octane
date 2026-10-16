@@ -76,7 +76,7 @@ function Page() @{
 function FancyAnchor(props) @{
 	const { children, ...rest } = props;
 	<a {...rest} data-fancy="true">
-		{children}
+		{children ?? 'Fallback'}
 	</a>
 }
 
@@ -87,6 +87,7 @@ function CreateLinkPage() @{
 		<FancyLink to="/about" class="l-fancy" ref={(node) => (lastLinkRef = node)}>
 			{'Fancy'}
 		</FancyLink>
+		<FancyLink to="/about" class="l-fallback" />
 	</div>
 }
 

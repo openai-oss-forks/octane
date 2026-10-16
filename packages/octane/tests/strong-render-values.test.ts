@@ -587,3 +587,56 @@ it.each(['client', 'server'] as const)(
 		expect(container.querySelector('[data-cloned] span')!.getAttribute('title')).toBe('cloned');
 	},
 );
+
+for (const selection of [
+	'enabled ? @{ <Search />; } : undefined',
+	'enabled && @{ <Search />; }',
+	'!enabled ? undefined : (enabled && @{ <Search />; })',
+	'enabled ? { content: @{ <Search />; } } : undefined',
+	'enabled ? { ...{ content: @{ <Search />; } } } : undefined',
+	'enabled ? [@{ <Search />; }] : undefined',
+	'enabled ? [...[@{ <Search />; }]] : undefined',
+]) {
+	it(`hydrates a render-block descriptor selected by ${selection}`, () => {
+		const source = `"use strong";
+import { useState } from 'octane';
+function Tooltip({ children }) @{ <>{children}</>; }
+function Search() @{
+  const [opening] = useState(false);
+  <><Tooltip><button>Search</button></Tooltip>@if(opening) { <div>Open</div>; }</>;
+}
+function Drawer({ action }) @{ <aside>@if(action) { <div>{action.content ?? action[0] ?? action}</div>; }</aside>; }
+export function View({ enabled }) @{
+  <main><Drawer action={${selection}} /><input name="state" defaultValue="retained" /></main>;
+}`;
+		const options = {
+			id: '/conditional-render-prop.tsrx',
+			compileOptions: { dev: true, hmr: false },
+		};
+		const serverModule = loadCompiledFixtureSource(source, { ...options, mode: 'server' });
+		const clientModule = loadCompiledFixtureSource(source, { ...options, mode: 'client' });
+		container = document.createElement('div');
+		document.body.appendChild(container);
+		container.innerHTML = Server.renderToString(serverModule.View, { enabled: true }).html;
+		const input = container.querySelector('input');
+		const button = container.querySelector('button');
+		const onRecoverableError = vi.fn();
+		root = Client.hydrateRoot(
+			container,
+			clientModule.View,
+			{ enabled: true },
+			{ onRecoverableError },
+		);
+		Client.flushSync(() => {});
+		expect(onRecoverableError).not.toHaveBeenCalled();
+		expect(container.querySelector('input')).toBe(input);
+		expect(container.querySelector('button')).toBe(button);
+		Client.flushSync(() => root!.render(clientModule.View, { enabled: false }));
+		expect(container.querySelector('button')).toBeNull();
+		expect(container.querySelector('input')).toBe(input);
+		Client.flushSync(() => root!.render(clientModule.View, { enabled: true }));
+		expect(container.querySelector('button')?.textContent).toBe('Search');
+		expect(container.querySelector('input')).toBe(input);
+		expect(onRecoverableError).not.toHaveBeenCalled();
+	});
+}

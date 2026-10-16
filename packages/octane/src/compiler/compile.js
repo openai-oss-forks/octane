@@ -17041,7 +17041,9 @@ function ssrEmitTsrxExpression(node, ctx, name, inlinedSubs, parentNs, cssHash, 
 			expr,
 		);
 		inlinedSubs.push(
-			ssrCompileBody(synth, ctx, helperName, cssHash, [], parentNs, false, componentNs),
+			withNestedTemplateScope(synth, ctx, () =>
+				ssrCompileBody(synth, ctx, helperName, cssHash, [], parentNs, false, componentNs),
+			),
 		);
 		lowered = inheritOriginLoc(b.id(helperName), expr);
 	} else {
@@ -24509,7 +24511,10 @@ function serverValueDirectiveFold(
 			'opaque',
 			null,
 			true,
-			true,
+			// Fragment extraction keeps a component in the client template only
+			// when its children need template normalization. Otherwise it becomes
+			// a descriptor hole and owns a range, even as the fragment's sole root.
+			requiresTemplateNormalization(preparedDirective, 'opaque', true, ctx),
 		);
 		inlinedSubs.push(sub.fn);
 		ctx.hoistedHelpers.push(

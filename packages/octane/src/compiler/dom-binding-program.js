@@ -58,7 +58,7 @@ function significant(node) {
 	);
 }
 
-export function needsBindingProgram(node, isUnbound) {
+export function needsBindingProgram(node, isUnbound, atRoot = true) {
 	if (!significant(node)) return false;
 	if (node.type === 'JSXExpressionContainer' && isUnbound(node.expression)) return false;
 	if (node.type !== 'JSXElement' && node.type !== 'Element') return true;
@@ -71,7 +71,15 @@ export function needsBindingProgram(node, isUnbound) {
 		)
 	)
 		return true;
-	if (tagOf(node) === 'textarea') return false;
+	if (tagOf(node) === 'textarea')
+		// A root textarea with an externally owned value needs the program's
+		// native-control handoff proof to adopt its presentation lease.
+		return (
+			atRoot &&
+			(node.openingElement?.attributes ?? node.attributes ?? []).some(
+				(attr) => rawName(attr) === 'value' && isUnbound(attrValue(attr)),
+			)
+		);
 	const children = (node.children ?? []).filter(significant);
 	const child = children.length === 1 ? children[0] : null;
 	const expression = child?.type === 'JSXExpressionContainer' ? child.expression : null;
@@ -83,7 +91,7 @@ export function needsBindingProgram(node, isUnbound) {
 				expression.typeAnnotation.type === 'TSNumberKeyword'))
 	)
 		return false;
-	return children.some((child) => needsBindingProgram(child, isUnbound));
+	return children.some((child) => needsBindingProgram(child, isUnbound, false));
 }
 
 function data(value) {
