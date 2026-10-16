@@ -1274,6 +1274,43 @@ export function CollisionHost(props) @{ 'use dom bindings';
 	}
 
 	for (const dev of [false, true]) {
+		it(`hands a scalar textarea presentation and native value to hydration (${dev ? 'dev' : 'prod'})`, async () => {
+			const scope = createScope({ scopeKey: `scalar-textarea-handoff-${dev}` });
+			const draft = scope.signal$('draft', 'server draft');
+			const props = { draft, placeholder: 'Message' };
+			const source = `import { unbound } from 'octane/behavior';
+export function ScalarControl(props) @{ 'use dom bindings';
+  <textarea value={unbound(props.draft)} placeholder={props.placeholder} />
+}`;
+			const fixture = authoredPresentation('ScalarControl', props, dev, source);
+			container.innerHTML = fixture.html;
+			const textarea = container.querySelector('textarea')!;
+			textarea.value = 'restored draft';
+			const control = runWithSignalOwner(scope, () => bindSignalControl(textarea, 'value', draft));
+			const binding = runWithSignalOwner(scope, () => fixture.attach(textarea, fixture.state));
+			try {
+				fixture.publish({ placeholder: 'Early presentation' });
+				expect(textarea.placeholder).toBe('Early presentation');
+				hydratedRoot = hydrateRoot(container, fixture.loadClient().ScalarControl, props, {
+					signalOwner: scope,
+					bindingLeases: [binding],
+					controlLeases: [control],
+				});
+				await act(() => {});
+				expect(container.querySelector('textarea')).toBe(textarea);
+				expect(textarea.value).toBe('restored draft');
+				expect(fixture.cleanup).toHaveBeenCalledOnce();
+				await act(() => draft.set('hydrated model'));
+				expect(textarea.value).toBe('hydrated model');
+			} finally {
+				hydratedRoot?.unmount();
+				hydratedRoot = undefined;
+				binding.dispose();
+				control();
+				scope.dispose();
+			}
+		});
+
 		it(`preserves native renderer event policy for explicitly unbound lowercase props (${dev ? 'dev' : 'prod'})`, () => {
 			const source = `import { unbound } from 'octane/behavior';
 export function EventHost(props) @{ 'use dom bindings';

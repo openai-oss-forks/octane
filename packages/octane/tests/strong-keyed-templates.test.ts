@@ -579,3 +579,34 @@ it('keeps keyed Fragment identities and nested captures stable across server asy
 		controller.abort();
 	}
 });
+
+it('captures child setup bindings in nested keyed Fragment SSR and hydration', () => {
+	const source = `
+		'use strong';
+		import { Fragment, useState } from 'octane';
+		export function View({ value }) @{
+			@{
+				const alias = value;
+				<Fragment key={alias}>
+					@{ const [saved] = useState(() => alias); <output>{saved}</output>; }
+				</Fragment>;
+			};
+		}
+	`;
+	const options = { id: '/nested-keyed-setup.tsrx', compileOptions: { dev: false, hmr: false } };
+	const serverView = loadCompiledFixtureSource(source, { ...options, mode: 'server' });
+	const clientView = loadCompiledFixtureSource(source, { ...options, mode: 'client' });
+	container = document.createElement('div');
+	document.body.append(container);
+	container.innerHTML = Server.renderToString(serverView.View, { value: 'a' }).html;
+	const output = container.querySelector('output');
+	const onRecoverableError = vi.fn();
+	root = Client.hydrateRoot(container, clientView.View, { value: 'a' }, { onRecoverableError });
+	Client.flushSync(() => {});
+	expect(container.querySelector('output')).toBe(output);
+	expect(container.textContent).toBe('a');
+	expect(onRecoverableError).not.toHaveBeenCalled();
+	Client.flushSync(() => root!.render(clientView.View, { value: 'b' }));
+	expect(container.textContent).toBe('b');
+	expect(container.querySelector('output')).not.toBe(output);
+});
