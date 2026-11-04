@@ -268,6 +268,7 @@ const UNIVERSAL_RUNTIME_IMPORTS = new Set([
 	'useReducer',
 	'useRef',
 	'useLazyRef',
+	'useSnapshot',
 	'useState',
 	'useSyncExternalStore',
 	'useTransition',

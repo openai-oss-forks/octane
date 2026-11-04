@@ -491,6 +491,28 @@ but it may not schedule work. The ref's `current` is read or changed from an
 event or effect, not during render. The experimental Valdi writer's existing
 adapter ABI does not support this hook.
 
+### Capture an initial render value with `useSnapshot`
+
+Use `useSnapshot` when a component needs to render from a value it captured on
+its first render. For example, this label stays the same even when the prop
+changes later.
+
+```tsrx
+import { useSnapshot } from 'octane';
+
+export function InitialLabel({ label }: { label: string }) @{
+	const initialLabel = useSnapshot(() => label);
+	<span>{initialLabel}</span>
+}
+```
+
+Octane runs the initializer when it creates the hook cell and returns the same
+value on later renders. A remount creates a fresh cell. Octane may retry work
+before it commits, and server rendering and hydration initialize separately.
+Keep the initializer free of side effects and supply matching initial values
+when hydrating. Treat returned objects as immutable render values. For mutable
+values read in effects or events, use `useRef` or `useLazyRef`.
+
 ### Synchronize an external system with `useEffect`
 
 Page metadata does not need an effect. Render `<title>` directly and Octane hoists it to

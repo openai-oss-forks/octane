@@ -1134,6 +1134,11 @@ interface ComponentMemoHook<P = any> {
 // The kernel's effect cell names its owner through a type parameter.
 type EffectHook = KernelEffectHook<UniversalOwnerRecord>;
 
+interface SnapshotHook<T = unknown> {
+	kind: 'snapshot';
+	value: T;
+}
+
 type UniversalHook =
 	| StateHook<any>
 	| LinkedStateHook<any, any>
@@ -1141,6 +1146,7 @@ type UniversalHook =
 	| MemoHook
 	| ComponentMemoHook
 	| RefHook
+	| SnapshotHook
 	| IdHook
 	| EffectHook
 	| EffectEventHook;
@@ -6510,6 +6516,17 @@ export function useRef<T>(initial: T, slot?: unknown): { current: T } {
 	const resolved = resolveHookSlot(slot);
 	const hook = owner.hooks.get(resolved) as RefHook<T> | undefined;
 	return hook?.kind === 'ref' ? hook.value : createRefHook(owner, resolved, initial);
+}
+
+export function useSnapshot<T>(initialize: () => T, slot?: unknown): T {
+	const owner = currentDraftOwner();
+	const resolved = resolveHookSlot(slot);
+	let hook = owner.hooks.get(resolved) as SnapshotHook<T> | undefined;
+	if (hook?.kind !== 'snapshot') {
+		hook = { kind: 'snapshot', value: initialize() };
+		owner.hooks.set(resolved, hook);
+	}
+	return hook.value;
 }
 
 export function useLazyRef<T>(factory: () => T, slot?: unknown): { current: T } {

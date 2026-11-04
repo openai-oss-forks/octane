@@ -51,6 +51,7 @@ const LOCAL_VALUE_HOOKS = new Set([
 	'useCallback',
 	'useRef',
 	'useLazyRef',
+	'useSnapshot',
 	'useId',
 	'useEffectEvent',
 	'useDeferredValue',
@@ -2019,7 +2020,7 @@ export function analyzeStrongMode(ast, source, filename, options = {}) {
 		report(
 			STRONG_RENDER_REF_READ,
 			node,
-			'Strong mode does not allow reading useRef.current during render. Read the ref in an event or effect, or use state or useLinkedState for values that drive render output. Render from a DOM measurement with useLayoutSnapshot.',
+			'Strong mode does not allow reading useRef.current during render. Read the ref in an event or effect. Capture an initial render value with useSnapshot, use state for editable values, or use useLinkedState to follow a source. Render from a DOM measurement with useLayoutSnapshot.',
 		);
 	}
 
@@ -3604,6 +3605,10 @@ export function analyzeStrongMode(ast, source, filename, options = {}) {
 		if (node?.type === 'Identifier') {
 			const binding = resolve(scope, node.name);
 			return binding?.kind === 'snapshot' ? binding : null;
+		}
+		if (node?.type === 'CallExpression' && importedHook(node.callee, scope) === 'useSnapshot') {
+			const shape = statePolicy.initialShape('useSnapshot', node, scope);
+			return { kind: 'snapshot', state: node, array: statePolicy.shapeIsArray(shape), shape };
 		}
 		if (node?.type !== 'MemberExpression') return null;
 		const tuple = stateTupleBinding(node.object, scope);
@@ -5583,6 +5588,7 @@ export function analyzeStrongMode(ast, source, filename, options = {}) {
 							: hook === 'useState' ||
 								  hook === 'useMemo' ||
 								  hook === 'useLazyRef' ||
+								  hook === 'useSnapshot' ||
 								  hook === 'useLayoutSnapshot' ||
 								  EFFECT_HOOKS.has(hook)
 								? 0
@@ -5706,7 +5712,12 @@ export function analyzeStrongMode(ast, source, filename, options = {}) {
 					propProjection(node.arguments?.[1], scope)
 				)
 					unlinkedPropInitializers.add(unwrap(node.arguments[1]));
-				if (hook === 'useState' || hook === 'useMemo' || hook === 'useLazyRef') {
+				if (
+					hook === 'useState' ||
+					hook === 'useMemo' ||
+					hook === 'useLazyRef' ||
+					hook === 'useSnapshot'
+				) {
 					if (
 						hook === 'useState' &&
 						executionPhase === 'render' &&

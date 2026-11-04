@@ -179,8 +179,8 @@
       "section": "render",
       "severity": "error",
       "detects": "A `useRef` or `useLazyRef` object's `current` is read during render, including React's lazy initialization test `if (ref.current === null)`.",
-      "replacement": "Read the ref in an event or effect, or render from state or `useLinkedState`. Create a value once with `useLazyRef(() => value)`, and render from a DOM measurement with `useLayoutSnapshot`. Pass the ref itself to a `ref` prop as usual.",
-      "primitives": ["useLazyRef", "useLayoutSnapshot", "useLinkedState"],
+      "replacement": "Read the ref in an event or effect. Capture an initial render value with `useSnapshot(() => value)`, use state for editable values, or use `useLinkedState` to follow a source. Create a mutable ref with `useLazyRef`, and render from a DOM measurement with `useLayoutSnapshot`.",
+      "primitives": ["useSnapshot", "useLazyRef", "useLayoutSnapshot", "useLinkedState"],
       "url": "https://octanejs.dev/docs/strong-mode#octane-strong-render-ref-read"
     },
     {
@@ -408,6 +408,16 @@
       "before": "\"use strong\";\nimport { useRef } from 'octane';\nimport { Store } from './store';\n\nexport function Cart() @{\n\tconst store = useRef<Store | null>(null);\n\tif (store.current === null) store.current = new Store();\n\t<button onClick={() => store.current?.add()}>Add</button>\n}\n",
       "after": "\"use strong\";\nimport { useLazyRef } from 'octane';\nimport { Store } from './store';\n\nexport function Cart() @{\n\tconst store = useLazyRef(() => new Store());\n\t<button onClick={() => store.current.add()}>Add</button>\n}\n",
       "note": "`useLazyRef` runs its factory once, when the hook cell is created, and keeps the ref on later renders. The factory follows the rules of a lazy `useState` initializer. `octane analyze --fix` applies this rewrite when the `useRef` declaration directly precedes the `if`."
+    },
+    {
+      "id": "initial-render-snapshot",
+      "title": "Capture an initial render value",
+      "react": "const initial = useRef(label); return initial.current;",
+      "strong": "const initial = useSnapshot(() => label);",
+      "codes": ["OCTANE_STRONG_RENDER_REF_READ"],
+      "before": "\"use strong\";\nimport { useRef } from 'octane';\n\nexport function Label({ label }: { label: string }) @{\n\tconst initial = useRef(label);\n\t<span>{initial.current}</span>\n}\n",
+      "after": "\"use strong\";\nimport { useSnapshot } from 'octane';\n\nexport function Label({ label }: { label: string }) @{\n\tconst initial = useSnapshot(() => label);\n\t<span>{initial}</span>\n}\n",
+      "note": "`useSnapshot` captures the initial value for the hook cell. Use the prop directly when rendering should follow later changes."
     },
     {
       "id": "layout-measurement",

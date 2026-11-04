@@ -127,6 +127,7 @@ export {
 	useCallback,
 	useRef,
 	useLazyRef,
+	useSnapshot,
 	useId,
 	useEffectEvent,
 	useTransition,

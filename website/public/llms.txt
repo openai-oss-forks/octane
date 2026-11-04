@@ -525,6 +525,7 @@ Adoption workflow for an existing app:
 Migration recipes, React idiom → Strong replacement:
 
 - Create a value once: `if (ref.current === null) ref.current = new Store();` → `const ref = useLazyRef(() => new Store());`
+- Capture an initial render value: `const initial = useRef(label); return initial.current;` → `const initial = useSnapshot(() => label);`
 - Render from a DOM measurement: `useLayoutEffect(() => setWidth(el.current.offsetWidth));` → `const width = useLayoutSnapshot(() => el.current?.offsetWidth ?? 0, { initial: 0 });`
 - Measure an element from a callback ref: `<span ref={(el) => { if (el) setWidth(el.offsetWidth); }}>` → `const width = useLayoutSnapshot(() => el.current?.offsetWidth ?? 0, { initial: 0 });`
 - Read the latest props from an effect: `const latest = useRef(onTick); latest.current = onTick;` → `const tick = useEffectEvent(onTick);`
@@ -564,7 +565,7 @@ Render snapshots and determinism:
 
 - `OCTANE_STRONG_RENDER_STATE_UPDATE`: Update state in an event handler, or use `useLinkedState` when state needs to reset or change with another value.
 - `OCTANE_STRONG_RENDER_STATE_GETTER_CALL`: Render from the first tuple member. Call the getter in an event, effect, or deferred callback for the latest scheduled state.
-- `OCTANE_STRONG_RENDER_REF_READ`: Read the ref in an event or effect, or render from state or `useLinkedState`. Create a value once with `useLazyRef(() => value)`, and render from a DOM measurement with `useLayoutSnapshot`. Pass the ref itself to a `ref` prop as usual.
+- `OCTANE_STRONG_RENDER_REF_READ`: Read the ref in an event or effect. Capture an initial render value with `useSnapshot(() => value)`, use state for editable values, or use `useLinkedState` to follow a source. Create a mutable ref with `useLazyRef`, and render from a DOM measurement with `useLayoutSnapshot`.
 - `OCTANE_STRONG_RENDER_REF_WRITE`: Create a value once with `useLazyRef(() => create())`. Read the latest props or state from an effect with `useEffectEvent`. Otherwise move the write to an event or effect, or express the value as state. `octane analyze --fix` rewrites the lazy initialization idiom.
 - `OCTANE_STRONG_RENDER_MODULE_STATE_READ`: Move the changing value into state or context, or pass an immutable snapshot as a prop.
 - `OCTANE_STRONG_RENDER_AMBIENT_READ`: Subscribe with `useSyncExternalStore` and a server snapshot for live browser state. Read a one-time value in an effect or a lazy `useState` initializer; lazy initializers also run during server rendering, so guard browser APIs there and keep server and client output the same.

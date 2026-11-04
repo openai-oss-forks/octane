@@ -234,8 +234,8 @@ export const STRONG_DIAGNOSTICS = [
 		detects:
 			"A `useRef` or `useLazyRef` object's `current` is read during render, including React's lazy initialization test `if (ref.current === null)`.",
 		replacement:
-			'Read the ref in an event or effect, or render from state or `useLinkedState`. Create a value once with `useLazyRef(() => value)`, and render from a DOM measurement with `useLayoutSnapshot`. Pass the ref itself to a `ref` prop as usual.',
-		primitives: ['useLazyRef', 'useLayoutSnapshot', 'useLinkedState'],
+			'Read the ref in an event or effect. Capture an initial render value with `useSnapshot(() => value)`, use state for editable values, or use `useLinkedState` to follow a source. Create a mutable ref with `useLazyRef`, and render from a DOM measurement with `useLayoutSnapshot`.',
+		primitives: ['useSnapshot', 'useLazyRef', 'useLayoutSnapshot', 'useLinkedState'],
 	},
 	{
 		code: 'OCTANE_STRONG_RENDER_REF_WRITE',
@@ -492,6 +492,28 @@ export function Cart() @{
 }
 `,
 		note: '`useLazyRef` runs its factory once, when the hook cell is created, and keeps the ref on later renders. The factory follows the rules of a lazy `useState` initializer. `octane analyze --fix` applies this rewrite when the `useRef` declaration directly precedes the `if`.',
+	},
+	{
+		id: 'initial-render-snapshot',
+		title: 'Capture an initial render value',
+		react: 'const initial = useRef(label); return initial.current;',
+		strong: 'const initial = useSnapshot(() => label);',
+		codes: ['OCTANE_STRONG_RENDER_REF_READ'],
+		before: `import { useRef } from 'octane';
+
+export function Label({ label }: { label: string }) @{
+	const initial = useRef(label);
+	<span>{initial.current}</span>
+}
+`,
+		after: `import { useSnapshot } from 'octane';
+
+export function Label({ label }: { label: string }) @{
+	const initial = useSnapshot(() => label);
+	<span>{initial}</span>
+}
+`,
+		note: '`useSnapshot` captures the initial value for the hook cell. Use the prop directly when rendering should follow later changes.',
 	},
 	{
 		id: 'layout-measurement',

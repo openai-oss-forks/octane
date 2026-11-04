@@ -3660,7 +3660,7 @@
       "OCTANE_STRONG_RENDER_REF_READ": {
         "severity": "error",
         "detects": "A `useRef` or `useLazyRef` object's `current` is read during render, including React's lazy initialization test `if (ref.current === null)`.",
-        "replacement": "Read the ref in an event or effect, or render from state or `useLinkedState`. Create a value once with `useLazyRef(() => value)`, and render from a DOM measurement with `useLayoutSnapshot`. Pass the ref itself to a `ref` prop as usual.",
+        "replacement": "Read the ref in an event or effect. Capture an initial render value with `useSnapshot(() => value)`, use state for editable values, or use `useLinkedState` to follow a source. Create a mutable ref with `useLazyRef`, and render from a DOM measurement with `useLayoutSnapshot`.",
         "url": "https://octanejs.dev/docs/strong-mode#octane-strong-render-ref-read"
       },
       "OCTANE_STRONG_RENDER_REF_WRITE": {
@@ -3827,6 +3827,13 @@
         "react": "if (ref.current === null) ref.current = new Store();",
         "strong": "const ref = useLazyRef(() => new Store());",
         "codes": ["OCTANE_STRONG_RENDER_REF_READ", "OCTANE_STRONG_RENDER_REF_WRITE"]
+      },
+      {
+        "id": "initial-render-snapshot",
+        "title": "Capture an initial render value",
+        "react": "const initial = useRef(label); return initial.current;",
+        "strong": "const initial = useSnapshot(() => label);",
+        "codes": ["OCTANE_STRONG_RENDER_REF_READ"]
       },
       {
         "id": "layout-measurement",

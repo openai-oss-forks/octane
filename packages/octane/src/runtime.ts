@@ -15956,6 +15956,19 @@ export function useRef<T>(initial?: T, slot?: HookSlot): { current: T | undefine
 	return s;
 }
 
+export function useSnapshot<T>(initialize: () => T, slot?: symbol): T;
+export function useSnapshot<T>(initialize: () => T, slot?: HookSlot): T {
+	slot = resolveSlot(slot);
+	if (slot === undefined) missingSlot('useSnapshot');
+	const scope = CURRENT_SCOPE!;
+	let cell = scope.hooks?.get(slot) as { snapshot: T } | undefined;
+	if (cell === undefined) {
+		cell = { snapshot: initialize() };
+		ensureHooks(scope).set(slot, cell);
+	}
+	return cell.snapshot;
+}
+
 export function useLazyRef<T>(factory: () => T, slot?: symbol): { current: T };
 export function useLazyRef<T>(factory: () => T, slot?: HookSlot): { current: T } {
 	slot = resolveSlot(slot);

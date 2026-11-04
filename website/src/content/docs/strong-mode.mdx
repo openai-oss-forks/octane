@@ -200,6 +200,36 @@ export function Cart() @{
 
 `useLazyRef` runs its factory once, when the hook cell is created, and keeps the ref on later renders. The factory follows the rules of a lazy `useState` initializer. `octane analyze --fix` applies this rewrite when the `useRef` declaration directly precedes the `if`.
 
+<h3 id="recipe-initial-render-snapshot">Capture an initial render value</h3>
+
+React: `const initial = useRef(label); return initial.current;`
+
+Strong: `const initial = useSnapshot(() => label);`
+
+Reports [`OCTANE_STRONG_RENDER_REF_READ`](#octane-strong-render-ref-read).
+
+```tsrx
+'use strong';
+import { useRef } from 'octane';
+
+export function Label({ label }: { label: string }) @{
+	const initial = useRef(label);
+	<span>{initial.current}</span>
+}
+```
+
+```tsrx
+'use strong';
+import { useSnapshot } from 'octane';
+
+export function Label({ label }: { label: string }) @{
+	const initial = useSnapshot(() => label);
+	<span>{initial}</span>
+}
+```
+
+`useSnapshot` captures the initial value for the hook cell. Use the prop directly when rendering should follow later changes.
+
 <h3 id="recipe-layout-measurement">Render from a DOM measurement</h3>
 
 React: `useLayoutEffect(() => setWidth(el.current.offsetWidth));`
@@ -695,7 +725,7 @@ A known third-tuple state getter is called during render. It can return schedule
 
 A `useRef` or `useLazyRef` object's `current` is read during render, including React's lazy initialization test `if (ref.current === null)`.
 
-**Replacement.** Read the ref in an event or effect, or render from state or `useLinkedState`. Create a value once with `useLazyRef(() => value)`, and render from a DOM measurement with `useLayoutSnapshot`. Pass the ref itself to a `ref` prop as usual.
+**Replacement.** Read the ref in an event or effect. Capture an initial render value with `useSnapshot(() => value)`, use state for editable values, or use `useLinkedState` to follow a source. Create a mutable ref with `useLazyRef`, and render from a DOM measurement with `useLayoutSnapshot`.
 
 <h4 id="octane-strong-render-ref-write">
 	<code>OCTANE_STRONG_RENDER_REF_WRITE</code>

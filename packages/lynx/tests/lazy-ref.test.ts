@@ -7,12 +7,14 @@ import {
 	universalValue,
 	useRef,
 	useLazyRef,
+	useSnapshot,
 } from '../src/main-renderer.js';
 
-describe('Lynx first-screen lazy ref', () => {
-	it('initializes the ref while leaving ordinary function values untouched', () => {
+describe('Lynx first-screen initialization hooks', () => {
+	it('renders a snapshot and lazy ref while leaving ordinary function values untouched', () => {
 		const factory = vi.fn(() => 'ready');
 		const callback = vi.fn();
+		const read = vi.fn(() => 'initial');
 		const plan = universalPlan('lynx', {
 			kind: 'host',
 			type: 'text',
@@ -21,10 +23,11 @@ describe('Lynx first-screen lazy ref', () => {
 		});
 		const Scene = defineUniversalComponent('lynx', () => {
 			const value = useLazyRef(factory);
+			const initial = useSnapshot(read);
 			const ordinary = useRef(callback);
 			return universalValue(plan, [
 				universalProps([]),
-				`${value.current}:${ordinary.current === callback}`,
+				`${initial}:${value.current}:${ordinary.current === callback}`,
 			]);
 		});
 		const result = renderLynxFirstScreen(Scene, {});
@@ -32,9 +35,10 @@ describe('Lynx first-screen lazy ref', () => {
 			op: 'create',
 			id: 2,
 			type: '#text',
-			props: { value: 'ready:true' },
+			props: { value: 'initial:ready:true' },
 		});
 		expect(factory).toHaveBeenCalledTimes(1);
+		expect(read).toHaveBeenCalledTimes(1);
 		expect(callback).not.toHaveBeenCalled();
 	});
 });

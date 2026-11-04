@@ -589,7 +589,10 @@ setting up an effect, and it cannot read or assign to a `useRef` object's
 `current` during render (`OCTANE_STRONG_RENDER_REF_READ` for reads,
 `OCTANE_STRONG_RENDER_REF_WRITE` for writes). React's lazy initialization,
 `if (ref.current === null) ref.current = create()`, does both: create the value
-once with `useLazyRef(() => create())` instead. A layout effect that copies a DOM
+once with `useLazyRef(() => create())` instead. Use `useSnapshot(() => value)`
+to capture an initial value for render. It keeps the value for the lifetime of
+the hook cell and follows the same initialization rules as lazy `useState`.
+A layout effect that copies a DOM
 measurement into state is a synchronous update in effect setup
 (`OCTANE_STRONG_EFFECT_STATE_UPDATE`): render the measurement from
 `useLayoutSnapshot(measure, { initial })` instead. It also
@@ -636,7 +639,7 @@ non-idempotent globals such as `Date.now()`, `Math.random()`, and
 `crypto.randomUUID()` (`OCTANE_STRONG_RENDER_IMPURE_CALL`), including inside
 callbacks that known array methods run synchronously. These checks follow
 supported aliases and synchronous helpers; they do not prove arbitrary method
-bodies or imported code pure. Lazy state and `useLazyRef` initialization may
+bodies or imported code pure. Lazy state, `useSnapshot`, and `useLazyRef` initialization may
 obtain an initial timestamp or random value. Locale- and time-zone-dependent formatting of a
 provable `Date` or an `Intl` service during render reports
 `OCTANE_STRONG_RENDER_LOCALE_FORMAT`; pass an explicit locale and `timeZone`.
@@ -666,7 +669,7 @@ imports. Those values still have to satisfy the render-snapshot contract.
 For changing browser state, use `useSyncExternalStore` with a server snapshot
 and render its returned snapshot. Browser reads in its snapshot callbacks,
 events, effects, and deferred callbacks remain supported. Lazy `useState`,
-`useReducer`, and `useLazyRef` initializers may also read browser state for an
+`useReducer`, `useSnapshot`, and `useLazyRef` initializers may also read browser state for an
 initial value. They
 still run during server rendering: guard unavailable browser APIs and ensure the
 server and client agree on initial output. A `typeof window` guard inside an

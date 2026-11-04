@@ -4641,7 +4641,7 @@ interface MemoHookRec {
 interface RefHookRec {
 	ref: { current: unknown };
 }
-interface LayoutSnapshotHookRec {
+interface SnapshotHookRec {
 	snapshot: unknown;
 }
 interface NativeLocalHookRec {
@@ -4652,7 +4652,7 @@ type AnyHookRec =
 	| LinkedHookRec<any, any>
 	| MemoHookRec
 	| RefHookRec
-	| LayoutSnapshotHookRec
+	| SnapshotHookRec
 	| NativeLocalHookRec;
 type ServerHookSlot = symbol | string | number;
 
@@ -8045,7 +8045,7 @@ export function useLayoutSnapshot<T>(
 	// A server render may retry after a render-phase update. The initial snapshot
 	// belongs to the hook's first pass, just as on the client. Nothing dispatches
 	// to it, so it needs no state queue or dispatcher.
-	let record = position.list[position.index] as LayoutSnapshotHookRec | undefined;
+	let record = position.list[position.index] as SnapshotHookRec | undefined;
 	if (record === undefined) {
 		record = { snapshot: options?.initial };
 		position.list[position.index] = record;
@@ -8153,6 +8153,18 @@ export function useRef<T>(initial?: T, slot?: ServerHookSlot): { current: T | un
 		position.list[position.index] = rec;
 	}
 	return rec.ref as { current: T | undefined };
+}
+
+export function useSnapshot<T>(initialize: () => T, slot?: symbol): T;
+export function useSnapshot<T>(initialize: () => T, slot?: ServerHookSlot): T {
+	const position = hookPosition(slot);
+	if (position === null) return initialize();
+	let cell = position.list[position.index] as SnapshotHookRec | undefined;
+	if (cell === undefined) {
+		cell = { snapshot: initialize() };
+		position.list[position.index] = cell;
+	}
+	return cell.snapshot as T;
 }
 
 export function useLazyRef<T>(factory: () => T, slot?: symbol): { current: T };

@@ -1528,6 +1528,11 @@ export function useRef<T>(initial: T, _slot?: unknown): { current: T } {
 	return { current: initial };
 }
 
+export function useSnapshot<T>(initialize: () => T, _slot?: unknown): T {
+	currentOwner();
+	return initialize();
+}
+
 export function useLazyRef<T>(factory: () => T, _slot?: unknown): { current: T } {
 	currentOwner();
 	return { current: factory() };

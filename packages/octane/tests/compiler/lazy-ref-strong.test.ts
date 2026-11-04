@@ -144,3 +144,30 @@ describe('Strong lazy ref factories and ownership', () => {
 		expect(() => compile(elementRef, '/src/App.tsrx', { strong: true })).not.toThrow();
 	});
 });
+
+describe('Strong initial render snapshots', () => {
+	it('rejects scheduling in a snapshot initializer', () => {
+		const source = `import { useSnapshot as capture } from 'octane';
+			export function App() @{
+				const first = capture(() => {
+					queueMicrotask(() => {});
+					return 1;
+				});
+				<span>{String(first)}</span>
+			}`;
+		expect(errors(source)).toEqual(['OCTANE_STRONG_RENDER_SIDE_EFFECT']);
+	});
+
+	it('rejects writes to the captured value during render and from events', () => {
+		const source = `import { useSnapshot } from 'octane';
+			export function App() @{
+				const first = useSnapshot(() => ({ values: [1] }));
+				first.values[0] = 2;
+				<button onClick={() => first.values.push(3)}>{String(first.values.length)}</button>
+			}`;
+		expect(errors(source)).toEqual([
+			'OCTANE_STRONG_RENDER_SNAPSHOT_MUTATION',
+			'OCTANE_STRONG_SNAPSHOT_MUTATION',
+		]);
+	});
+});
